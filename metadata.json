@@ -1,0 +1,6 @@
+{
+  "name": "GeoTKA SMP - Latihan Soal Geometri 2D & 3D",
+  "description": "Aplikasi latihan soal Tes Kemampuan Akademik (TKA) Matematika bidang Geometri 2D dan 3D untuk siswa SMP, lengkap dengan pembahasan bertahap dan visual interaktif.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
