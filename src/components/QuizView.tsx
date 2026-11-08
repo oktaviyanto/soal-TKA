@@ -12,6 +12,8 @@ interface QuizViewProps {
   student: StudentProfile;
   onOpenProfile: () => void;
   onSaveQuizResult?: (result: QuizResult) => void;
+  bookmarkedIds?: string[];
+  onToggleBookmark?: (questionId: string) => void;
 }
 
 export const QuizView: React.FC<QuizViewProps> = ({
@@ -19,6 +21,8 @@ export const QuizView: React.FC<QuizViewProps> = ({
   student,
   onOpenProfile: _onOpenProfile,
   onSaveQuizResult,
+  bookmarkedIds = [],
+  onToggleBookmark,
 }) => {
   const [mode, setMode] = useState<'simulasi' | 'latihan_mandiri'>(initialMode);
   const [filterDimension, setFilterDimension] = useState<DimensionType | 'ALL'>('ALL');
@@ -386,6 +390,8 @@ export const QuizView: React.FC<QuizViewProps> = ({
               onSelectOption={handleSelectOption}
               isMarked={markedQuestions.includes(currentQuestion.id)}
               onToggleMark={handleToggleMark}
+              isBookmarked={bookmarkedIds.includes(currentQuestion.id)}
+              onToggleBookmark={() => onToggleBookmark?.(currentQuestion.id)}
               isExamSubmitted={isSubmitted}
             />
           )}

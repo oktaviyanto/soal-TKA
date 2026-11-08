@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Question } from '../types/geometry';
 import { GeometryDiagram } from './GeometryDiagram';
-import { CheckCircle2, XCircle, Lightbulb, ChevronDown, ChevronUp, Bookmark, Sparkles, BookOpen } from 'lucide-react';
+import { CheckCircle2, XCircle, Lightbulb, ChevronDown, ChevronUp, Bookmark, Sparkles, BookOpen, Flag } from 'lucide-react';
 
 interface QuestionCardProps {
   question: Question;
@@ -11,6 +11,8 @@ interface QuestionCardProps {
   onSelectOption: (option: 'A' | 'B' | 'C' | 'D') => void;
   isMarked?: boolean;
   onToggleMark?: () => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
   isExamSubmitted?: boolean;
 }
 
@@ -22,6 +24,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onSelectOption,
   isMarked = false,
   onToggleMark,
+  isBookmarked = false,
+  onToggleBookmark,
   isExamSubmitted = false,
 }) => {
   const [showHint, setShowHint] = useState<boolean>(false);
@@ -66,20 +70,40 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </span>
         </div>
 
-        {/* Mark for review button */}
-        {onToggleMark && !isExamSubmitted && (
-          <button
-            onClick={onToggleMark}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-              isMarked
-                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Bookmark className={`w-3.5 h-3.5 ${isMarked ? 'fill-amber-500 text-amber-500' : ''}`} />
-            {isMarked ? 'Ditandai Ragu-ragu' : 'Tandai Ragu-ragu'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Bookmark for Later Review */}
+          {onToggleBookmark && (
+            <button
+              type="button"
+              onClick={onToggleBookmark}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                isBookmarked
+                  ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+              title={isBookmarked ? 'Hapus dari Soal Tersimpan' : 'Simpan soal ini ke tab Soal Tersimpan'}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-500 text-amber-600' : ''}`} />
+              <span>{isBookmarked ? 'Tersimpan' : 'Simpan Soal'}</span>
+            </button>
+          )}
+
+          {/* Mark for review in-exam button */}
+          {onToggleMark && !isExamSubmitted && (
+            <button
+              type="button"
+              onClick={onToggleMark}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+                isMarked
+                  ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Flag className={`w-3.5 h-3.5 ${isMarked ? 'fill-rose-500 text-rose-500' : ''}`} />
+              <span>{isMarked ? 'Ragu-ragu' : 'Tandai'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Title & Question Prompt */}

@@ -9,6 +9,7 @@ import { QuizView } from './components/QuizView';
 import { ShapeExplorer } from './components/ShapeExplorer';
 import { FormulaCardsView } from './components/FormulaCardsView';
 import { PerformanceDashboard } from './components/PerformanceDashboard';
+import { SavedQuestionsView } from './components/SavedQuestionsView';
 import { StudentProfileModal } from './components/StudentProfileModal';
 import { TutorDrawer } from './components/TutorDrawer';
 import {
@@ -23,14 +24,18 @@ import {
   FileSpreadsheet,
   TrendingUp,
   Award,
+  Bookmark,
+  FolderOpen,
 } from 'lucide-react';
 import { getAccessToken, googleSignIn, getCurrentUser } from './services/googleAuth';
+import { initializeDriveFolderAndSheet, TARGET_FOLDER_NAME } from './services/googleSheets';
 import { evaluateAchievements } from './data/achievements';
 import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_PROFILE = 'geotka_student_profile';
 const STORAGE_KEY_THEME = 'geotka_theme';
 const STORAGE_KEY_HISTORY = 'geotka_quiz_history';
+const STORAGE_KEY_BOOKMARKS = 'geotka_bookmarked_questions';
 
 // Default initial progression data to visualize immediately upon launch
 const DEFAULT_SAMPLE_HISTORY: QuizResult[] = [
@@ -89,7 +94,7 @@ const DEFAULT_SAMPLE_HISTORY: QuizResult[] = [
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'latihan' | 'simulasi' | 'performa' | 'lab' | 'rumus'>('latihan');
+  const [activeTab, setActiveTab] = useState<'latihan' | 'simulasi' | 'performa' | 'tersimpan' | 'lab' | 'rumus'>('latihan');
 
   // Student Profile State (strictly Kelas 9-A through 9-D)
   const [student, setStudent] = useState<StudentProfile | null>(() => {
@@ -112,9 +117,48 @@ export default function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(!student);
   const [isTutorOpen, setIsTutorOpen] = useState<boolean>(false);
   const [hasGoogleToken, setHasGoogleToken] = useState<boolean>(false);
+  const [driveFolderInfo, setDriveFolderInfo] = useState<{ folderUrl: string; sheetUrl: string } | null>(null);
+  const [isInitializingDrive, setIsInitializingDrive] = useState<boolean>(false);
+
+  // Bookmarked questions state with persistence and initial sample items
+  const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_BOOKMARKS);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return ['geo-q-02', 'geo-q-06']; // Initial sample bookmarks: soal contextual & bangun ruang
+    } catch {
+      return ['geo-q-02', 'geo-q-06'];
+    }
+  });
+
+  const handleToggleBookmark = (questionId: string) => {
+    setBookmarkedIds((prev) => {
+      const exists = prev.includes(questionId);
+      const updated = exists ? prev.filter((id) => id !== questionId) : [...prev, questionId];
+      try {
+        localStorage.setItem(STORAGE_KEY_BOOKMARKS, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('Failed to save bookmarks', e);
+      }
+      return updated;
+    });
+  };
 
   useEffect(() => {
-    getAccessToken().then((token) => setHasGoogleToken(Boolean(token)));
+    getAccessToken().then((token) => {
+      if (token) {
+        setHasGoogleToken(true);
+        initializeDriveFolderAndSheet(token)
+          .then((res) => {
+            setDriveFolderInfo({ folderUrl: res.folderUrl, sheetUrl: res.spreadsheetUrl });
+          })
+          .catch((err) => {
+            console.warn('Drive check on startup:', err);
+          });
+      }
+    });
   }, []);
 
   // Dark / Light Theme
@@ -209,12 +253,18 @@ export default function App() {
 
   const handleConnectGoogle = async () => {
     try {
+      setIsInitializingDrive(true);
       const res = await googleSignIn();
       if (res?.accessToken) {
         setHasGoogleToken(true);
+        const setup = await initializeDriveFolderAndSheet(res.accessToken);
+        setDriveFolderInfo({ folderUrl: setup.folderUrl, sheetUrl: setup.spreadsheetUrl });
+        setUnlockedToast(`Tersambung ke Google Drive! Folder "${TARGET_FOLDER_NAME}" & Spreadsheet telah siap.`);
       }
     } catch (err) {
       console.warn('Google sign-in error:', err);
+    } finally {
+      setIsInitializingDrive(false);
     }
   };
 
@@ -260,7 +310,7 @@ export default function App() {
           </button>
 
           {/* Zone 2: Concise single-line navigation links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
+          <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
             <button
               onClick={() => setActiveTab('latihan')}
               className={`hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -292,6 +342,22 @@ export default function App() {
               Performa Saya
             </button>
             <button
+              onClick={() => setActiveTab('tersimpan')}
+              className={`hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'tersimpan'
+                  ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+                  : ''
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Soal Tersimpan</span>
+              {bookmarkedIds.length > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300">
+                  {bookmarkedIds.length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('lab')}
               className={`hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'lab'
@@ -317,21 +383,25 @@ export default function App() {
           <div className="flex items-center gap-2.5 shrink-0">
             {/* Google Sheets / Drive Button */}
             {hasGoogleToken ? (
-              <span
-                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
-                title={`Tersambung ke Google Drive (${currentUser?.email || ''})`}
+              <a
+                href={driveFolderInfo?.folderUrl || 'https://drive.google.com'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+                title={`Buka Folder '${TARGET_FOLDER_NAME}' di Google Drive (${currentUser?.email || ''})`}
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="truncate max-w-[120px]">Drive Aktif</span>
-              </span>
+                <FolderOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="truncate max-w-[120px]">Folder Drive</span>
+              </a>
             ) : (
               <button
                 onClick={handleConnectGoogle}
+                disabled={isInitializingDrive}
                 className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
-                title="Sambungkan Akun Google untuk Rekap Nilai Otomatis ke Drive"
+                title="Sambungkan Akun Google untuk Rekap Nilai Otomatis ke Folder 'ujicoba aplikasi' di Google Drive"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Google Drive</span>
+                <span>{isInitializingDrive ? 'Menyiapkan...' : 'Google Drive'}</span>
               </button>
             )}
 
@@ -379,10 +449,10 @@ export default function App() {
       </header>
 
       {/* Mobile Sub-Navigation Bar */}
-      <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 py-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+      <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 overflow-x-auto">
         <button
           onClick={() => setActiveTab('latihan')}
-          className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
             activeTab === 'latihan'
               ? 'bg-indigo-600 text-white font-semibold'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -392,17 +462,17 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('simulasi')}
-          className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
             activeTab === 'simulasi'
               ? 'bg-indigo-600 text-white font-semibold'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          Simulasi (20 Soal)
+          Simulasi
         </button>
         <button
           onClick={() => setActiveTab('performa')}
-          className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
             activeTab === 'performa'
               ? 'bg-indigo-600 text-white font-semibold'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -411,18 +481,35 @@ export default function App() {
           Performa
         </button>
         <button
+          onClick={() => setActiveTab('tersimpan')}
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
+            activeTab === 'tersimpan'
+              ? 'bg-indigo-600 text-white font-semibold'
+              : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span>Tersimpan</span>
+          {bookmarkedIds.length > 0 && (
+            <span className={`text-[10px] px-1 rounded-full font-bold ${
+              activeTab === 'tersimpan' ? 'bg-white text-indigo-700' : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+            }`}>
+              {bookmarkedIds.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('lab')}
-          className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
             activeTab === 'lab'
               ? 'bg-indigo-600 text-white font-semibold'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          Lab Interaktif
+          Lab
         </button>
         <button
           onClick={() => setActiveTab('rumus')}
-          className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+          className={`px-2 py-1.5 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
             activeTab === 'rumus'
               ? 'bg-indigo-600 text-white font-semibold'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -453,7 +540,7 @@ export default function App() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
               Peserta: <strong>{currentStudent.name}</strong> ({currentStudent.grade}). 
-              Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan muncul saat siswa mengklik jawaban, serta otomatis tersimpan ke Google Sheets di Google Drive!
+              Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan tampil setelah mengklik jawaban, nilai otomatis tersimpan ke spreadsheet di folder <strong>ujicoba aplikasi</strong> Google Drive!
             </p>
           </div>
 
@@ -486,6 +573,8 @@ export default function App() {
             student={currentStudent}
             onOpenProfile={() => setIsProfileModalOpen(true)}
             onSaveQuizResult={handleSaveQuizResult}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={handleToggleBookmark}
           />
         )}
 
@@ -496,6 +585,8 @@ export default function App() {
             student={currentStudent}
             onOpenProfile={() => setIsProfileModalOpen(true)}
             onSaveQuizResult={handleSaveQuizResult}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={handleToggleBookmark}
           />
         )}
 
@@ -507,6 +598,14 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onOpenProfile={() => setIsProfileModalOpen(true)}
             hasGoogleToken={hasGoogleToken}
+          />
+        )}
+
+        {activeTab === 'tersimpan' && (
+          <SavedQuestionsView
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={handleToggleBookmark}
+            onGoToQuiz={() => setActiveTab('latihan')}
           />
         )}
 

@@ -14,10 +14,13 @@ import {
   Check,
   Loader2,
   AlertCircle,
+  FolderOpen,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportQuizResultToGoogleSheet } from '../services/googleSheets';
 import { googleSignIn, getCurrentUser, getAccessToken } from '../services/googleAuth';
+import { generateStudentPortfolioPdf } from '../services/pdfReportGenerator';
 
 interface QuizReportModalProps {
   result: QuizResult;
@@ -40,8 +43,25 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
 
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportedUrl, setExportedUrl] = useState<string | null>(result.googleSheetUrl || null);
+  const [exportedFolderUrl, setExportedFolderUrl] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState<boolean>(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      await generateStudentPortfolioPdf({
+        history: [result],
+        student,
+        hasGoogleToken: isGoogleConnected,
+      });
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   useEffect(() => {
     if (score >= 70) {
@@ -100,6 +120,7 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
       });
 
       setExportedUrl(res.spreadsheetUrl);
+      setExportedFolderUrl(res.folderUrl);
       result.googleSheetUrl = res.spreadsheetUrl;
       onResultUpdated?.({ ...result, googleSheetUrl: res.spreadsheetUrl });
     } catch (err: any) {
@@ -278,19 +299,39 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
           )}
 
           {exportedUrl ? (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
-              <span className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-xs">
-                File: <strong>Rekap Nilai GeoTKA SMP Kelas 9</strong>
-              </span>
-              <a
-                href={exportedUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors shrink-0"
-              >
-                <span>Buka Google Sheets di Drive</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                <span>
+                  📁 Folder: <strong className="text-emerald-700 dark:text-emerald-300">ujicoba aplikasi</strong>
+                </span>
+                <span>
+                  Akun: <strong>{currentUser?.email || 'Google Drive'}</strong>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={exportedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors shrink-0"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Buka Google Sheet Rekap</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                {exportedFolderUrl && (
+                  <a
+                    href={exportedFolderUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors shrink-0"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Buka Folder ujicoba aplikasi</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
             </div>
           ) : (
             <button
@@ -316,6 +357,26 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
               )}
             </button>
           )}
+
+          {/* Download PDF button */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isGeneratingPdf}
+            className="w-full mt-2 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            title="Unduh Lembar Portofolio PDF Resmi Sesi Ini"
+          >
+            {isGeneratingPdf ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Menyusun Dokumen Portofolio PDF...</span>
+              </>
+            ) : (
+              <>
+                <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Unduh Portofolio PDF (A4 Resmi)</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Buttons */}
