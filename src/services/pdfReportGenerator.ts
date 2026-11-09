@@ -405,35 +405,144 @@ export const generateStudentPortfolioPdf = async ({
   }
 
   // ================= 6. ANALISIS KOMPETENSI & REKOMENDASI GURU/TUTOR =================
-  const recLines = doc.splitTextToSize(diagnostic.pdfFormattedText, pageWidth - margin * 2 - 8);
-  const recBoxHeight = Math.max(26, recLines.length * 3.4 + 9);
+  // Typography & Layout overhaul: spacious, legible, well-spaced structured cards
 
-  if (currentY + recBoxHeight > pageHeight - 45) {
+  // Estimate total section height needed (~80-90mm). If not enough room for Section 6 + Signatures, break page cleanly
+  if (currentY > pageHeight - 105) {
     doc.addPage();
-    currentY = 20;
+    currentY = 22;
   }
 
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, recBoxHeight, 2, 2, 'FD');
-
+  // Section Main Header with Status Badge
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text('SARAN PERBAIKAN & PENINGKATAN BELAJAR (SKOR AKTUAL):', margin + 4, currentY + 5.5);
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42); // Slate 900
+  doc.text('SARAN PERBAIKAN & PENINGKATAN BELAJAR', margin, currentY);
 
+  // Status & actual score badge on the right
+  const statusLabelText =
+    totalSessions > 0
+      ? `Predikat: ${diagnostic.statusLabel} · Skor Aktual ${diagnostic.actualScore}/100`
+      : 'Status: Belum Ada Riwayat Sesi';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(79, 70, 229); // Indigo 600
+  doc.text(statusLabelText, pageWidth - margin, currentY, { align: 'right' });
+  currentY += 4.5;
+
+  // --- SUBSECTION A: Evaluasi Capaian Siswa (Summary Box) ---
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8);
-  doc.setTextColor(51, 65, 85);
-  doc.text(recLines, margin + 4, currentY + 10);
+  doc.setFontSize(8);
+  const summaryWidth = pageWidth - margin * 2 - 12;
+  const summaryLines = doc.splitTextToSize(diagnostic.summaryDiagnostic, summaryWidth);
+  const summaryLineHeight = 3.8; // mm per line
+  const summaryBoxHeight = Math.max(18, summaryLines.length * summaryLineHeight + 10);
 
-  currentY += recBoxHeight + 6;
+  if (currentY + summaryBoxHeight > pageHeight - 55) {
+    doc.addPage();
+    currentY = 22;
+  }
+
+  // Card background
+  doc.setFillColor(248, 250, 252); // Slate 50
+  doc.setDrawColor(226, 232, 240); // Slate 200
+  doc.roundedRect(margin, currentY, pageWidth - margin * 2, summaryBoxHeight, 2, 2, 'FD');
+
+  // Left vertical accent stripe
+  doc.setFillColor(79, 70, 229); // Indigo 600
+  doc.roundedRect(margin, currentY, 2.5, summaryBoxHeight, 1, 1, 'F');
+
+  // Box Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(79, 70, 229); // Indigo 600
+  doc.text('DIAGNOSIS CAPAIAN KOMPETENSI (SKOR AKTUAL):', margin + 6, currentY + 5.5);
+
+  // Box Body Text with comfortable line spacing
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59); // Slate 800
+  let textY = currentY + 10;
+  for (let i = 0; i < summaryLines.length; i++) {
+    doc.text(summaryLines[i], margin + 6, textY);
+    textY += summaryLineHeight;
+  }
+
+  currentY += summaryBoxHeight + 5;
+
+  // --- SUBSECTION B: Rekomendasi Tindak Lanjut & Langkah Konkret ---
+  if (diagnostic.actionSteps && diagnostic.actionSteps.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42); // Slate 900
+    doc.text('LANGKAH TINDAK LANJUT & PENINGKATAN BELAJAR:', margin, currentY);
+    currentY += 4;
+
+    const stepCardWidth = pageWidth - margin * 2;
+
+    diagnostic.actionSteps.forEach((step) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      const descLines = doc.splitTextToSize(step.description, stepCardWidth - 22);
+      const descLineHeight = 3.6; // mm per line
+      const stepCardHeight = Math.max(13, descLines.length * descLineHeight + 7.5);
+
+      // Check page boundary
+      if (currentY + stepCardHeight > pageHeight - 45) {
+        doc.addPage();
+        currentY = 22;
+      }
+
+      // Step card background
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(margin, currentY, stepCardWidth, stepCardHeight, 1.5, 1.5, 'FD');
+
+      // Step number pill badge
+      const badgeSize = 5.5;
+      const badgeX = margin + 3.5;
+      const badgeY = currentY + 3;
+      doc.setFillColor(79, 70, 229); // Indigo 600
+      doc.roundedRect(badgeX, badgeY, badgeSize, badgeSize, 1, 1, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${step.number}`, badgeX + badgeSize / 2, badgeY + 4, { align: 'center' });
+
+      // Step title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42); // Slate 900
+      doc.text(step.title, badgeX + badgeSize + 3, currentY + 4.8);
+
+      // Step description
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85); // Slate 700
+      let dY = currentY + 8.8;
+      for (let di = 0; di < descLines.length; di++) {
+        doc.text(descLines[di], badgeX + badgeSize + 3, dY);
+        dY += descLineHeight;
+      }
+
+      currentY += stepCardHeight + 2.5; // Distinct gap between cards
+    });
+
+    currentY += 4; // Gap after steps
+  }
 
   // ================= 7. LEMBAR PENGESAHAN / VALIDASI (SIGNATURES) =================
   if (currentY > pageHeight - 45) {
     doc.addPage();
-    currentY = 20;
+    currentY = 22;
   }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('LEMBAR VALIDASI & PENGESAHAN HASIL ASESMEN:', margin, currentY);
+  currentY += 6;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -442,16 +551,16 @@ export const generateStudentPortfolioPdf = async ({
   const sigColWidth = (pageWidth - margin * 2) / 3;
 
   // Column 1: Siswa (Hapus NISN dan kelas sesuai permintaan)
-  doc.text('Mengetahui / Siswa,', margin + sigColWidth * 0 + 6, currentY);
-  doc.text(`( ${student.name || 'Siswa'} )`, margin + sigColWidth * 0 + 6, currentY + 20);
+  doc.text('Mengetahui / Siswa,', margin + sigColWidth * 0 + 4, currentY);
+  doc.text(`( ${student.name || 'Siswa'} )`, margin + sigColWidth * 0 + 4, currentY + 20);
 
   // Column 2: Orang Tua / Wali (Hanya tanda tangan saja, tanpa tanggal sesuai permintaan)
-  doc.text('Orang Tua / Wali Siswa,', margin + sigColWidth * 1 + 6, currentY);
-  doc.text('( ........................................ )', margin + sigColWidth * 1 + 6, currentY + 20);
+  doc.text('Orang Tua / Wali Siswa,', margin + sigColWidth * 1 + 4, currentY);
+  doc.text('( ........................................ )', margin + sigColWidth * 1 + 4, currentY + 20);
 
   // Column 3: Guru Pengampu Matematika (Tanpa NIP sesuai permintaan)
-  doc.text('Guru Pembimbing Matematika,', margin + sigColWidth * 2 + 6, currentY);
-  doc.text('( ........................................ )', margin + sigColWidth * 2 + 6, currentY + 20);
+  doc.text('Guru Pembimbing Matematika,', margin + sigColWidth * 2 + 4, currentY);
+  doc.text('( ........................................ )', margin + sigColWidth * 2 + 4, currentY + 20);
 
   // ================= 8. FOOTER NUMBERING ON ALL PAGES =================
   const totalPages = doc.getNumberOfPages();
