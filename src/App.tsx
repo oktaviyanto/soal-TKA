@@ -34,63 +34,46 @@ import confetti from 'canvas-confetti';
 
 const STORAGE_KEY_PROFILE = 'geotka_student_profile';
 const STORAGE_KEY_THEME = 'geotka_theme';
-const STORAGE_KEY_HISTORY = 'geotka_quiz_history';
 const STORAGE_KEY_BOOKMARKS = 'geotka_bookmarked_questions';
 
-// Default initial progression data to visualize immediately upon launch
-const DEFAULT_SAMPLE_HISTORY: QuizResult[] = [
-  {
-    id: 'res-sample-1',
-    date: '04/03/2026',
-    mode: 'simulasi',
-    totalQuestions: 20,
-    correctCount: 14,
-    wrongCount: 6,
-    unansweredCount: 0,
-    score: 70,
-    timeSpentSeconds: 1140,
-    userAnswers: {},
-    markedQuestions: [],
-    breakdown: {
-      lingkaran: { correct: 6, total: 8 },
-      bangunRuang: { correct: 8, total: 12 },
-    },
-  },
-  {
-    id: 'res-sample-2',
-    date: '06/03/2026',
-    mode: 'simulasi',
-    totalQuestions: 20,
-    correctCount: 16,
-    wrongCount: 4,
-    unansweredCount: 0,
-    score: 80,
-    timeSpentSeconds: 1020,
-    userAnswers: {},
-    markedQuestions: [],
-    breakdown: {
-      lingkaran: { correct: 7, total: 8 },
-      bangunRuang: { correct: 9, total: 12 },
-    },
-  },
-  {
-    id: 'res-sample-3',
-    date: '07/03/2026',
-    mode: 'simulasi',
-    totalQuestions: 20,
-    correctCount: 18,
-    wrongCount: 2,
-    unansweredCount: 0,
-    score: 90,
-    timeSpentSeconds: 880,
-    userAnswers: {},
-    markedQuestions: [],
-    breakdown: {
-      lingkaran: { correct: 8, total: 8 },
-      bangunRuang: { correct: 10, total: 12 },
-    },
-  },
-];
+// Helper to get student-specific storage key so each student's score and history is actual and isolated
+const getStudentHistoryKey = (studentName?: string) =>
+  `geotka_quiz_history_${(studentName || 'default').trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+
+const isLegitimateQuizResult = (r: QuizResult): boolean => {
+  if (!r || r.id?.startsWith('res-sample')) return false;
+  const answered = Object.keys(r.userAnswers || {}).length;
+  const evaluated = (r.correctCount || 0) + (r.wrongCount || 0);
+  return answered > 0 || evaluated > 0;
+};
+
+const loadStudentQuizHistory = (studentName?: string): QuizResult[] => {
+  try {
+    const key = getStudentHistoryKey(studentName);
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        // Filter out any mock/sample items and empty entries (0 answers)
+        return parsed.filter(isLegitimateQuizResult);
+      }
+    }
+    // Also clean up any legacy global mock/empty data if present
+    const legacy = localStorage.getItem('geotka_quiz_history');
+    if (legacy) {
+      const parsed = JSON.parse(legacy);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter(isLegitimateQuizResult);
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('geotka_quiz_history', JSON.stringify(cleaned));
+        }
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  }
+};
 
 export default function App() {
   // Navigation State
@@ -182,22 +165,16 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Quiz History State for 'Performa Saya' Dashboard
+  // Quiz History State for 'Performa Saya' Dashboard (strictly actual student data)
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-      return DEFAULT_SAMPLE_HISTORY;
-    } catch {
-      return DEFAULT_SAMPLE_HISTORY;
-    }
+    return loadStudentQuizHistory(student?.name);
   });
 
   const [unlockedToast, setUnlockedToast] = useState<string | null>(null);
 
   const handleSaveQuizResult = (newResult: QuizResult) => {
+    if (!isLegitimateQuizResult(newResult)) return;
+
     const prevAchievements = evaluateAchievements(quizHistory, hasGoogleToken);
     const prevUnlockedIds = new Set(prevAchievements.filter((a) => a.unlocked).map((a) => a.id));
 
@@ -211,7 +188,8 @@ export default function App() {
         updated = [...prev, newResult];
       }
       try {
-        localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
+        const key = getStudentHistoryKey(student?.name);
+        localStorage.setItem(key, JSON.stringify(updated));
       } catch (e) {
         console.warn('Failed to save quiz history', e);
       }
@@ -235,7 +213,8 @@ export default function App() {
   const handleClearHistory = () => {
     setQuizHistory([]);
     try {
-      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify([]));
+      const key = getStudentHistoryKey(student?.name);
+      localStorage.setItem(key, JSON.stringify([]));
     } catch (e) {
       console.warn('Failed to clear history', e);
     }
@@ -248,6 +227,9 @@ export default function App() {
     } catch (e) {
       console.warn('Failed to save profile', e);
     }
+    // Load this specific student's actual history (empty if new student)
+    const newStudentHistory = loadStudentQuizHistory(newProfile.name);
+    setQuizHistory(newStudentHistory);
     setIsProfileModalOpen(false);
   };
 
@@ -293,6 +275,20 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+      {/* Top Academic Ribbon with Author Credit in Corner */}
+      <div className="w-full bg-slate-100/90 dark:bg-slate-900/90 border-b border-slate-200/70 dark:border-slate-800/70 py-1.5 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="hidden sm:inline">Kurikulum Tes Kemampuan Akademik (TKA) Matematika SMP · Geometri 2D & 3D</span>
+          <span className="sm:hidden">GeoTKA SMP Kelas 9</span>
+          <div className="flex items-center gap-1.5 font-medium">
+            <span className="text-slate-500 dark:text-slate-400">Nama Pembuat :</span>
+            <strong className="text-slate-900 dark:text-slate-100 font-semibold tracking-tight font-display">
+              Oktaviyanto CFM
+            </strong>
+          </div>
+        </div>
+      </div>
+
       {/* ================= ZONE 1: TOP BAR (Strict 3-Zone Contract) ================= */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
@@ -623,16 +619,18 @@ export default function App() {
             <span>20 Butir Soal Lingkaran & Bangun Ruang · Output Otomatis Google Sheets & Drive</span>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px]">
-            <span className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <span className="flex items-center gap-1 text-slate-500">
               <Circle className="w-3 h-3 text-indigo-500" /> Lingkaran
             </span>
-            <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1">
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span className="flex items-center gap-1 text-slate-500">
               <Box className="w-3 h-3 text-indigo-500" /> Bangun Ruang
             </span>
-            <span aria-hidden="true">·</span>
-            <span>Standar TKA SMP</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span className="font-medium text-slate-600 dark:text-slate-300">
+              Nama Pembuat : <strong className="text-slate-900 dark:text-slate-100 font-semibold font-display">Oktaviyanto CFM</strong>
+            </span>
           </div>
         </div>
       </footer>

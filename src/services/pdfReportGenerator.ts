@@ -2,6 +2,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { QuizResult, StudentProfile } from '../types/geometry';
 import { evaluateAchievements } from '../data/achievements';
+import { QUESTION_BANK } from '../data/questionBank';
+import { getAccuratePerformanceRecommendation } from '../utils/performanceRecommendation';
 
 export interface GeneratePdfOptions {
   history: QuizResult[];
@@ -24,9 +26,15 @@ const formatDuration = (totalSeconds: number): string => {
 };
 
 /**
- * Returns a formal competency grade and description based on score.
+ * Returns a formal competency grade and description based on score and session count.
  */
-const getPredicate = (score: number): { label: string; grade: string; color: [number, number, number] } => {
+const getPredicate = (
+  score: number,
+  totalSessions: number
+): { label: string; grade: string; color: [number, number, number] } => {
+  if (totalSessions === 0) {
+    return { label: 'Belum Ada Sesi', grade: '-', color: [100, 116, 139] };
+  }
   if (score >= 85) {
     return { label: 'Sangat Memuaskan', grade: 'A', color: [16, 185, 129] }; // Emerald
   }
@@ -89,7 +97,7 @@ export const generateStudentPortfolioPdf = async ({
     month: 'long',
     year: 'numeric',
   });
-  doc.text(`Tanggal Cetak: ${todayFormatted} · Akun: ${hasGoogleToken ? 'Google Drive Aktif' : 'Lokal'}`, margin, 23);
+  doc.text(`Tanggal Cetak: ${todayFormatted} · Nama Pembuat : Oktaviyanto CFM · Akun: ${hasGoogleToken ? 'Google Drive Aktif' : 'Lokal'}`, margin, 23);
 
   // ================= 2. BIODATA SISWA (STUDENT IDENTITY) =================
   let currentY = 36;
@@ -143,30 +151,49 @@ export const generateStudentPortfolioPdf = async ({
   currentY += 30;
 
   // ================= 3. STATISTIK UTAMA (EXECUTIVE SUMMARY TILES) =================
-  const totalSessions = history.length;
-  const highestScore = totalSessions > 0 ? Math.max(...history.map((h) => h.score)) : 0;
+  // Only include completed quiz sessions with actual answered questions
+  const completedHistory = history.filter((item) => {
+    if (!item || !item.totalQuestions) return false;
+    const answeredCount = Object.keys(item.userAnswers || {}).length;
+    const evaluatedCount = (item.correctCount || 0) + (item.wrongCount || 0);
+    return answeredCount > 0 || evaluatedCount > 0;
+  });
+
+  const totalSessions = completedHistory.length;
+
+  // Total curriculum questions available (20 total: 8 Lingkaran, 12 Bangun Ruang)
+  const TOTAL_AVAILABLE = QUESTION_BANK.length; // 20
+  const TOTAL_LINGKARAN_AVAILABLE = QUESTION_BANK.filter((q) => q.dimension === 'Lingkaran').length; // 8
+  const TOTAL_BANGUN_RUANG_AVAILABLE = QUESTION_BANK.filter((q) => q.dimension === 'Bangun Ruang').length; // 12
+
+  // Track unique questions answered correctly across completed attempts
+  const masteredQuestionIds = new Set<string>();
+  completedHistory.forEach((session) => {
+    QUESTION_BANK.forEach((q) => {
+      if (session.userAnswers && session.userAnswers[q.id] === q.correctAnswer) {
+        masteredQuestionIds.add(q.id);
+      }
+    });
+  });
+
+  const masteredLingkaranCount = QUESTION_BANK.filter(
+    (q) => q.dimension === 'Lingkaran' && masteredQuestionIds.has(q.id)
+  ).length;
+
+  const masteredBangunRuangCount = QUESTION_BANK.filter(
+    (q) => q.dimension === 'Bangun Ruang' && masteredQuestionIds.has(q.id)
+  ).length;
+
+  const totalMasteredCount = masteredQuestionIds.size;
+  const ketuntasanPersen = Math.round((totalMasteredCount / TOTAL_AVAILABLE) * 100);
+  const ketuntasanLingkaran = Math.round((masteredLingkaranCount / TOTAL_LINGKARAN_AVAILABLE) * 100);
+  const ketuntasanBangunRuang = Math.round((masteredBangunRuangCount / TOTAL_BANGUN_RUANG_AVAILABLE) * 100);
+
+  const highestScore = totalSessions > 0 ? Math.max(...completedHistory.map((h) => h.score)) : 0;
   const avgScore =
-    totalSessions > 0 ? Math.round(history.reduce((a, b) => a + b.score, 0) / totalSessions) : 0;
-  const avgAccuracy =
-    totalSessions > 0
-      ? Math.round(
-          history.reduce((a, b) => a + (b.correctCount / b.totalQuestions) * 100, 0) /
-            totalSessions
-        )
-      : 0;
-
-  const totalLingCorrect = history.reduce((a, b) => a + b.breakdown.lingkaran.correct, 0);
-  const totalLingAttempted = history.reduce((a, b) => a + b.breakdown.lingkaran.total, 0);
-  const lingAcc =
-    totalLingAttempted > 0 ? Math.round((totalLingCorrect / totalLingAttempted) * 100) : 0;
-
-  const totalBRCorrect = history.reduce((a, b) => a + b.breakdown.bangunRuang.correct, 0);
-  const totalBRAttempted = history.reduce((a, b) => a + b.breakdown.bangunRuang.total, 0);
-  const brAcc =
-    totalBRAttempted > 0 ? Math.round((totalBRCorrect / totalBRAttempted) * 100) : 0;
-
-  const totalTimeSpent = history.reduce((a, b) => a + b.timeSpentSeconds, 0);
-  const overallPredicate = getPredicate(avgScore);
+    totalSessions > 0 ? Math.round(completedHistory.reduce((a, b) => a + b.score, 0) / totalSessions) : 0;
+  const overallPredicate = getPredicate(avgScore, totalSessions);
+  const diagnostic = getAccuratePerformanceRecommendation(completedHistory);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
@@ -179,28 +206,33 @@ export const generateStudentPortfolioPdf = async ({
 
   const metrics = [
     {
-      label: 'Skor Tertinggi',
-      value: `${highestScore} / 100`,
-      sub: highestScore >= 80 ? 'Lulus Target TKA' : 'Target: 80',
-      color: [79, 70, 229] as [number, number, number],
+      label: 'Skor Aktual',
+      value: totalSessions > 0 ? `${diagnostic.actualScore} / 100` : '- / 100',
+      sub: totalSessions > 0 ? `${diagnostic.statusLabel} (${diagnostic.actualDate})` : 'Belum ada sesi',
+      color:
+        totalSessions > 0
+          ? diagnostic.actualScore >= 75
+            ? ([16, 185, 129] as [number, number, number])
+            : ([217, 119, 6] as [number, number, number])
+          : ([100, 116, 139] as [number, number, number]),
     },
     {
       label: 'Rata-rata Skor',
-      value: `${avgScore} / 100`,
-      sub: `Predikat: ${overallPredicate.grade}`,
-      color: [15, 23, 42] as [number, number, number],
+      value: totalSessions > 0 ? `${avgScore} / 100` : '- / 100',
+      sub: totalSessions > 0 ? `Dari ${totalSessions} sesi (Max: ${highestScore})` : 'Predikat: -',
+      color: totalSessions > 0 ? ([15, 23, 42] as [number, number, number]) : ([100, 116, 139] as [number, number, number]),
     },
     {
-      label: 'Akurasi Lingkaran',
-      value: `${lingAcc}%`,
-      sub: `${totalLingCorrect}/${totalLingAttempted} butir benar`,
-      color: [16, 185, 129] as [number, number, number],
+      label: 'Ketuntasan Lingkaran',
+      value: totalSessions > 0 ? `${ketuntasanLingkaran}%` : '0%',
+      sub: `${masteredLingkaranCount}/${TOTAL_LINGKARAN_AVAILABLE} soal tuntas terjawab benar`,
+      color: totalSessions > 0 ? ([79, 70, 229] as [number, number, number]) : ([100, 116, 139] as [number, number, number]),
     },
     {
-      label: 'Akurasi Bangun Ruang',
-      value: `${brAcc}%`,
-      sub: `${totalBRCorrect}/${totalBRAttempted} butir benar`,
-      color: [59, 130, 246] as [number, number, number],
+      label: 'Ketuntasan Bangun Ruang',
+      value: totalSessions > 0 ? `${ketuntasanBangunRuang}%` : '0%',
+      sub: `${masteredBangunRuangCount}/${TOTAL_BANGUN_RUANG_AVAILABLE} soal tuntas terjawab benar`,
+      color: totalSessions > 0 ? ([59, 130, 246] as [number, number, number]) : ([100, 116, 139] as [number, number, number]),
     },
   ];
 
@@ -235,9 +267,8 @@ export const generateStudentPortfolioPdf = async ({
   doc.text('RIWAYAT LATIHAN & SIMULASI UJIAN (20 BUTIR SOAL PER SESI)', margin, currentY);
   currentY += 2;
 
-  const tableRows = history.map((res, idx) => {
-    const accuracy = Math.round((res.correctCount / res.totalQuestions) * 100);
-    const pred = getPredicate(res.score);
+  const tableRows = completedHistory.map((res, idx) => {
+    const pred = getPredicate(res.score, 1);
     const m = Math.floor(res.timeSpentSeconds / 60);
     const s = res.timeSpentSeconds % 60;
     const dur = `${m}m ${s < 10 ? '0' : ''}${s}s`;
@@ -322,7 +353,7 @@ export const generateStudentPortfolioPdf = async ({
   }
 
   // ================= 5. LENCANA PRESTASI & PENGHARGAAN (ACHIEVEMENTS) =================
-  const achievements = evaluateAchievements(history, hasGoogleToken);
+  const achievements = evaluateAchievements(completedHistory, hasGoogleToken);
   const unlocked = achievements.filter((a) => a.unlocked);
 
   doc.setFont('helvetica', 'bold');
@@ -374,39 +405,29 @@ export const generateStudentPortfolioPdf = async ({
   }
 
   // ================= 6. ANALISIS KOMPETENSI & REKOMENDASI GURU/TUTOR =================
-  if (currentY > pageHeight - 55) {
+  const recLines = doc.splitTextToSize(diagnostic.pdfFormattedText, pageWidth - margin * 2 - 8);
+  const recBoxHeight = Math.max(26, recLines.length * 3.4 + 9);
+
+  if (currentY + recBoxHeight > pageHeight - 45) {
     doc.addPage();
     currentY = 20;
   }
 
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 22, 2, 2, 'FD');
+  doc.roundedRect(margin, currentY, pageWidth - margin * 2, recBoxHeight, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text('REKOMENDASI EVALUASI & TINDAK LANJUT BELAJAR:', margin + 4, currentY + 5.5);
-
-  let recommendationText = '';
-  if (lingAcc >= 80 && brAcc >= 80) {
-    recommendationText =
-      'Siswa menunjukkan penguasaan materi sangat baik pada Lingkaran maupun Bangun Ruang. Disarankan terus mempertahankan konsistensi latihan soal HOTS gabungan bangun ruang silinder, kerucut, dan belahan bola.';
-  } else if (lingAcc < brAcc) {
-    recommendationText =
-      'Pemahaman bangun ruang cukup baik, namun materi Lingkaran (sudut pusat, sudut keliling, dan panjang busur juring) perlu diperdalam. Siswa disarankan mencoba latihan interaktif di Lab Geometri GeoTKA.';
-  } else {
-    recommendationText =
-      'Pemahaman konsep Lingkaran sudah solid. Siswa disarankan meningkatkan latihan spasial 3D, terutama menghitung volume sisa bangun gabungan dan luas selimut kerucut yang memerlukan teorema Pythagoras.';
-  }
+  doc.text('SARAN PERBAIKAN & PENINGKATAN BELAJAR (SKOR AKTUAL):', margin + 4, currentY + 5.5);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(51, 65, 85);
-  const splitRec = doc.splitTextToSize(recommendationText, pageWidth - margin * 2 - 8);
-  doc.text(splitRec, margin + 4, currentY + 11);
+  doc.text(recLines, margin + 4, currentY + 10);
 
-  currentY += 28;
+  currentY += recBoxHeight + 6;
 
   // ================= 7. LEMBAR PENGESAHAN / VALIDASI (SIGNATURES) =================
   if (currentY > pageHeight - 45) {
@@ -420,20 +441,17 @@ export const generateStudentPortfolioPdf = async ({
 
   const sigColWidth = (pageWidth - margin * 2) / 3;
 
-  // Column 1: Siswa
+  // Column 1: Siswa (Hapus NISN dan kelas sesuai permintaan)
   doc.text('Mengetahui / Siswa,', margin + sigColWidth * 0 + 6, currentY);
   doc.text(`( ${student.name || 'Siswa'} )`, margin + sigColWidth * 0 + 6, currentY + 20);
-  doc.text(`NISN / Kelas: ${student.grade}`, margin + sigColWidth * 0 + 6, currentY + 24);
 
-  // Column 2: Orang Tua / Wali
+  // Column 2: Orang Tua / Wali (Hanya tanda tangan saja, tanpa tanggal sesuai permintaan)
   doc.text('Orang Tua / Wali Siswa,', margin + sigColWidth * 1 + 6, currentY);
   doc.text('( ........................................ )', margin + sigColWidth * 1 + 6, currentY + 20);
-  doc.text('Tanda Tangan & Tanggal', margin + sigColWidth * 1 + 6, currentY + 24);
 
-  // Column 3: Guru Pengampu Matematika
+  // Column 3: Guru Pengampu Matematika (Tanpa NIP sesuai permintaan)
   doc.text('Guru Pembimbing Matematika,', margin + sigColWidth * 2 + 6, currentY);
   doc.text('( ........................................ )', margin + sigColWidth * 2 + 6, currentY + 20);
-  doc.text('NIP / Sekolah', margin + sigColWidth * 2 + 6, currentY + 24);
 
   // ================= 8. FOOTER NUMBERING ON ALL PAGES =================
   const totalPages = doc.getNumberOfPages();
@@ -447,7 +465,7 @@ export const generateStudentPortfolioPdf = async ({
     doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
 
     doc.text(
-      'Dokumen Portofolio Resmi GeoTKA SMP Kelas 9 · Lingkaran & Bangun Ruang · Otomatis Google Sheets & Drive',
+      'Dokumen Portofolio Resmi GeoTKA SMP Kelas 9 · Nama Pembuat : Oktaviyanto CFM · Otomatis Google Sheets & Drive',
       margin,
       pageHeight - 6
     );

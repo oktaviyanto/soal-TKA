@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { QuizResult, StudentProfile } from '../types/geometry';
+import { QUESTION_BANK } from '../data/questionBank';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -32,6 +33,7 @@ import {
 import { evaluateAchievements } from '../data/achievements';
 import { AchievementBadgeCard } from './AchievementBadgeCard';
 import { generateStudentPortfolioPdf } from '../services/pdfReportGenerator';
+import { getAccuratePerformanceRecommendation } from '../utils/performanceRecommendation';
 
 interface PerformanceDashboardProps {
   history: QuizResult[];
@@ -58,7 +60,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
     try {
       setIsGeneratingPdf(true);
       await generateStudentPortfolioPdf({
-        history,
+        history: completedHistory,
         student,
         hasGoogleToken,
       });
@@ -71,20 +73,62 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
     }
   };
 
-  // If user has no sessions yet, provide clean progression data
-  const hasActualHistory = history.length > 0;
+  // 1. Only include completed quiz sessions with actual answered questions
+  const completedHistory = history.filter((item) => {
+    if (!item || !item.totalQuestions) return false;
+    const answeredCount = Object.keys(item.userAnswers || {}).length;
+    const evaluatedCount = (item.correctCount || 0) + (item.wrongCount || 0);
+    return answeredCount > 0 || evaluatedCount > 0;
+  });
 
-  // Prepare chart data
-  const chartData = (hasActualHistory ? history : []).map((item, idx) => {
+  const hasActualHistory = completedHistory.length > 0;
+  const totalSessions = completedHistory.length;
+
+  // 2. Total curriculum questions available (20 total: 8 Lingkaran, 12 Bangun Ruang)
+  const TOTAL_AVAILABLE = QUESTION_BANK.length; // 20
+  const TOTAL_LINGKARAN_AVAILABLE = QUESTION_BANK.filter((q) => q.dimension === 'Lingkaran').length; // 8
+  const TOTAL_BANGUN_RUANG_AVAILABLE = QUESTION_BANK.filter((q) => q.dimension === 'Bangun Ruang').length; // 12
+
+  // 3. Track distinct questions that have been answered correctly across all completed attempts
+  // Ketuntasan dihitung berdasarkan persentase soal yang terjawab dengan benar dari total soal yang tersedia, BUKAN dari jumlah percobaan
+  const masteredQuestionIds = new Set<string>();
+  completedHistory.forEach((session) => {
+    QUESTION_BANK.forEach((q) => {
+      if (session.userAnswers && session.userAnswers[q.id] === q.correctAnswer) {
+        masteredQuestionIds.add(q.id);
+      }
+    });
+  });
+
+  const masteredLingkaranCount = QUESTION_BANK.filter(
+    (q) => q.dimension === 'Lingkaran' && masteredQuestionIds.has(q.id)
+  ).length;
+
+  const masteredBangunRuangCount = QUESTION_BANK.filter(
+    (q) => q.dimension === 'Bangun Ruang' && masteredQuestionIds.has(q.id)
+  ).length;
+
+  const totalMasteredCount = masteredQuestionIds.size;
+
+  // Ketuntasan Persen dari total soal yang tersedia:
+  const ketuntasanPersen = Math.round((totalMasteredCount / TOTAL_AVAILABLE) * 100);
+  const ketuntasanLingkaran = Math.round((masteredLingkaranCount / TOTAL_LINGKARAN_AVAILABLE) * 100);
+  const ketuntasanBangunRuang = Math.round((masteredBangunRuangCount / TOTAL_BANGUN_RUANG_AVAILABLE) * 100);
+
+  // Score statistics & diagnostic recommendation based on actual completed sessions
+  const highestScore = totalSessions > 0 ? Math.max(...completedHistory.map((h) => h.score)) : 0;
+  const avgScore =
+    totalSessions > 0
+      ? Math.round(completedHistory.reduce((acc, h) => acc + h.score, 0) / totalSessions)
+      : 0;
+
+  const diagnostic = getAccuratePerformanceRecommendation(completedHistory);
+
+  // Prepare chart data from completed sessions
+  const chartData = completedHistory.map((item, idx) => {
     const accuracy = Math.round((item.correctCount / item.totalQuestions) * 100);
-    const lingAcc =
-      item.breakdown.lingkaran.total > 0
-        ? Math.round((item.breakdown.lingkaran.correct / item.breakdown.lingkaran.total) * 100)
-        : 0;
-    const brAcc =
-      item.breakdown.bangunRuang.total > 0
-        ? Math.round((item.breakdown.bangunRuang.correct / item.breakdown.bangunRuang.total) * 100)
-        : 0;
+    const lingAcc = Math.round((item.breakdown.lingkaran.correct / 8) * 100);
+    const brAcc = Math.round((item.breakdown.bangunRuang.correct / 12) * 100);
 
     return {
       session: `Sesi ${idx + 1}`,
@@ -98,37 +142,8 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
     };
   });
 
-  // Calculate statistics
-  const totalSessions = history.length;
-  const highestScore = totalSessions > 0 ? Math.max(...history.map((h) => h.score)) : 0;
-  const avgScore =
-    totalSessions > 0
-      ? Math.round(history.reduce((acc, h) => acc + h.score, 0) / totalSessions)
-      : 0;
-  const avgAccuracy =
-    totalSessions > 0
-      ? Math.round(
-          history.reduce(
-            (acc, h) => acc + (h.correctCount / h.totalQuestions) * 100,
-            0
-          ) / totalSessions
-        )
-      : 0;
-
-  const totalLingkaranCorrect = history.reduce((acc, h) => acc + h.breakdown.lingkaran.correct, 0);
-  const totalLingkaranAttempted = history.reduce((acc, h) => acc + h.breakdown.lingkaran.total, 0);
-  const lingOverallAcc =
-    totalLingkaranAttempted > 0
-      ? Math.round((totalLingkaranCorrect / totalLingkaranAttempted) * 100)
-      : 0;
-
-  const totalBRCorrect = history.reduce((acc, h) => acc + h.breakdown.bangunRuang.correct, 0);
-  const totalBRAttempted = history.reduce((acc, h) => acc + h.breakdown.bangunRuang.total, 0);
-  const brOverallAcc =
-    totalBRAttempted > 0 ? Math.round((totalBRCorrect / totalBRAttempted) * 100) : 0;
-
-  // Achievements evaluation
-  const achievements = evaluateAchievements(history, hasGoogleToken);
+  // Achievements evaluation using completed sessions
+  const achievements = evaluateAchievements(completedHistory, hasGoogleToken);
   const unlockedBadgesCount = achievements.filter((a) => a.unlocked).length;
 
   return (
@@ -142,9 +157,13 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
               Performa Saya · Grafik Perkembangan TKA
             </h2>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Visualisasi skor, persentase akurasi, dan perbandingan penguasaan materi Lingkaran vs Bangun Ruang.
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <span>Visualisasi skor aktual, persentase akurasi, dan penguasaan materi Lingkaran vs Bangun Ruang.</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-medium text-slate-700 dark:text-slate-300">
+              Nama Pembuat : <strong className="font-semibold text-indigo-600 dark:text-indigo-400">Oktaviyanto CFM</strong>
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -185,18 +204,24 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Card 1: Skor Tertinggi */}
+        {/* Card 1: Skor Aktual (Bukan Skor Tertinggi) */}
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Skor Tertinggi</span>
-            <Award className="w-4 h-4 text-amber-500" />
+            <span className="text-slate-700 dark:text-slate-300 font-bold">Skor Aktual</span>
+            <CheckCircle2
+              className={`w-4 h-4 ${
+                diagnostic.actualScore >= 75 ? 'text-emerald-500' : 'text-amber-500'
+              }`}
+            />
           </div>
           <div className="text-2xl sm:text-3xl font-black font-display text-indigo-600 dark:text-indigo-400 tabular-nums">
-            {highestScore}
+            {totalSessions > 0 ? diagnostic.actualScore : '-'}
             <span className="text-xs font-normal text-slate-400"> / 100</span>
           </div>
           <p className="text-[11px] text-slate-500">
-            {highestScore >= 80 ? 'Target Lulus TKA Tercapai' : 'Target KKM: 75'}
+            {totalSessions > 0
+              ? `${diagnostic.statusLabel} · ${diagnostic.actualDate}`
+              : 'Belum ada sesi latihan'}
           </p>
         </div>
 
@@ -207,25 +232,27 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
             <Target className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-slate-100 tabular-nums">
-            {avgScore}
+            {totalSessions > 0 ? avgScore : '-'}
             <span className="text-xs font-normal text-slate-400"> / 100</span>
           </div>
           <p className="text-[11px] text-slate-500">
-            Dari {totalSessions} kali pengerjaan
+            {totalSessions > 0 ? `Dari ${totalSessions} sesi · Tertinggi: ${highestScore}` : 'Belum ada sesi pengerjaan'}
           </p>
         </div>
 
-        {/* Card 3: Rata-rata Akurasi */}
+        {/* Card 3: Ketuntasan Belajar dari Total Soal Tersedia */}
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-            <span>Akurasi Jawaban</span>
+            <span>Ketuntasan Soal</span>
             <Sparkles className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl sm:text-3xl font-black font-display text-emerald-600 dark:text-emerald-400 tabular-nums">
-            {avgAccuracy}%
+            {totalSessions > 0 ? `${ketuntasanPersen}%` : '0%'}
           </div>
           <p className="text-[11px] text-slate-500">
-            Persentase jawaban tepat
+            {totalSessions > 0
+              ? `${totalMasteredCount} dari ${TOTAL_AVAILABLE} soal tuntas terjawab benar`
+              : '0 dari 20 soal tersedia'}
           </p>
         </div>
 
@@ -239,7 +266,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
             {totalSessions}
           </div>
           <p className="text-[11px] text-slate-500">
-            Kelas: {student.grade}
+            {totalSessions > 0 ? `Kelas: ${student.grade}` : 'Mulai simulasi pertama'}
           </p>
         </div>
       </div>
@@ -485,20 +512,20 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                   <Circle className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Lingkaran (8 Soal per Sesi)</span>
+                  <span>Lingkaran (8 Soal Tersedia)</span>
                 </span>
                 <span className="font-math font-bold text-indigo-600 dark:text-indigo-400">
-                  {lingOverallAcc}%
+                  {ketuntasanLingkaran}%
                 </span>
               </div>
               <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                 <div
                   className="h-full bg-indigo-600 transition-all duration-500 rounded-full"
-                  style={{ width: `${lingOverallAcc}%` }}
+                  style={{ width: `${ketuntasanLingkaran}%` }}
                 />
               </div>
               <span className="text-[11px] text-slate-500 block">
-                {totalLingkaranCorrect} benar dari {totalLingkaranAttempted} total soal lingkaran
+                {masteredLingkaranCount} tuntas dari {TOTAL_LINGKARAN_AVAILABLE} total soal lingkaran yang tersedia
               </span>
             </div>
 
@@ -507,33 +534,87 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                   <Box className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Bangun Ruang (12 Soal per Sesi)</span>
+                  <span>Bangun Ruang (12 Soal Tersedia)</span>
                 </span>
                 <span className="font-math font-bold text-emerald-600 dark:text-emerald-400">
-                  {brOverallAcc}%
+                  {ketuntasanBangunRuang}%
                 </span>
               </div>
               <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                 <div
                   className="h-full bg-emerald-600 transition-all duration-500 rounded-full"
-                  style={{ width: `${brOverallAcc}%` }}
+                  style={{ width: `${ketuntasanBangunRuang}%` }}
                 />
               </div>
               <span className="text-[11px] text-slate-500 block">
-                {totalBRCorrect} benar dari {totalBRAttempted} total soal bangun ruang
+                {masteredBangunRuangCount} tuntas dari {TOTAL_BANGUN_RUANG_AVAILABLE} total soal bangun ruang yang tersedia
               </span>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-900/60 text-xs text-indigo-950 dark:text-indigo-200 space-y-1">
-            <span className="font-bold flex items-center gap-1">
-              💡 Rekomendasi Belajar:
-            </span>
-            <p className="leading-relaxed">
-              {lingOverallAcc > brOverallAcc
-                ? 'Penguasaan Lingkaran kamu sangat kuat! Pertahankan dan perbanyak latihan rumus Bangun Ruang Gabungan (Tabung + Kerucut/Bola).'
-                : 'Pemahaman Bangun Ruang kamu sudah mantap! Perkuat kembali penerapan konsep juring dan keliling lingkaran pada soal kontekstual.'}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700 pb-2">
+              <span className="font-bold flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                <span>Saran Perbaikan & Peningkatan Belajar</span>
+              </span>
+              {totalSessions > 0 && (
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  Skor Aktual: <strong className="font-math font-bold text-indigo-600 dark:text-indigo-400">{diagnostic.actualScore}/100</strong> ({diagnostic.statusLabel})
+                </span>
+              )}
+            </div>
+
+            {/* Diagnostic Summary */}
+            <p className="leading-relaxed text-slate-700 dark:text-slate-300">
+              {diagnostic.summaryDiagnostic}
             </p>
+
+            {/* Subtopik yang Perlu Diperbaiki if any */}
+            {diagnostic.missedCategories.length > 0 && (
+              <div className="pt-0.5 space-y-1">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
+                  Subtopik Fokus Remediasi:
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  {diagnostic.missedCategories.map((cat, idx) => (
+                    <span key={cat} className="flex items-center gap-1">
+                      {idx > 0 && <span aria-hidden="true" className="text-slate-400">·</span>}
+                      <span className="font-medium text-rose-600 dark:text-rose-400">● {cat}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Concrete Action Steps */}
+            {diagnostic.actionSteps.length > 0 && (
+              <div className="space-y-2 pt-1 border-t border-slate-200/80 dark:border-slate-700">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                  Langkah Perbaikan Terarah:
+                </span>
+                <div className="space-y-1.5">
+                  {diagnostic.actionSteps.map((step) => (
+                    <div
+                      key={step.number}
+                      className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs"
+                    >
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold font-math text-[11px] flex items-center justify-center mt-0.5 border border-indigo-200/60 dark:border-indigo-800">
+                        {step.number}
+                      </span>
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-900 dark:text-slate-100 text-[11px]">
+                          {step.title}
+                        </p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -632,7 +713,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
           </div>
         </div>
 
-        {history.length === 0 ? (
+        {completedHistory.length === 0 ? (
           <p className="text-xs text-slate-400 py-4 text-center">
             Belum ada riwayat pengerjaan yang tersimpan.
           </p>
@@ -651,10 +732,10 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {history.map((item, idx) => (
+                {completedHistory.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
-                      Sesi #{history.length - idx}
+                      Sesi #{completedHistory.length - idx}
                     </td>
                     <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">{item.date}</td>
                     <td className="py-2.5 px-3">

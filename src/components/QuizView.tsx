@@ -161,7 +161,10 @@ export const QuizView: React.FC<QuizViewProps> = ({
     setIsTimerRunning(false);
     setShowConfirmSubmit(false);
     setShowReportModal(true);
-    onSaveQuizResult?.(res);
+    const answeredCount = Object.keys(userAnswers).length;
+    if (answeredCount > 0) {
+      onSaveQuizResult?.(res);
+    }
   };
 
   const handleResetSession = () => {
