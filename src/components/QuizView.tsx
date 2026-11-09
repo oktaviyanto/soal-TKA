@@ -4,7 +4,8 @@ import { QUESTION_BANK } from '../data/questionBank';
 import { QuestionCard } from './QuestionCard';
 import { QuizReportModal } from './QuizReportModal';
 import { PomodoroTimer } from './PomodoroTimer';
-import { Clock, Play, RotateCcw, AlertCircle, Circle, Box, Filter, FileSpreadsheet } from 'lucide-react';
+import { GeometryStudyTips } from './GeometryStudyTips';
+import { Clock, Play, RotateCcw, AlertCircle, Circle, Box, Filter, FileSpreadsheet, CheckCircle, FileText } from 'lucide-react';
 import { getAccessToken, googleSignIn, getCurrentUser } from '../services/googleAuth';
 
 interface QuizViewProps {
@@ -384,6 +385,11 @@ export const QuizView: React.FC<QuizViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Question Viewport (Center / Main) */}
         <div className="lg:col-span-8 space-y-4">
+          {/* Tips Belajar for Latihan Mandiri Mode */}
+          {mode === 'latihan_mandiri' && (
+            <GeometryStudyTips questionNumber={currentIndex + 1} />
+          )}
+
           {currentQuestion && (
             <QuestionCard
               question={currentQuestion}
@@ -420,15 +426,23 @@ export const QuizView: React.FC<QuizViewProps> = ({
               >
                 Soal Selanjutnya →
               </button>
-            ) : mode === 'simulasi' && !isSubmitted ? (
+            ) : !isSubmitted ? (
               <button
-                onClick={() => setShowConfirmSubmit(true)}
-                className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors cursor-pointer"
+                onClick={handleForceSubmit}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold font-display bg-emerald-600 hover:bg-emerald-500 text-white shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95"
+                title="Selesaikan pengerjaan dan lihat laporan skor beserta analisis benar-salah"
               >
-                Kirim Lembar Ujian ✓
+                <CheckCircle className="w-4 h-4" />
+                <span>Selesai & Lihat Laporan Skor</span>
               </button>
             ) : (
-              <div />
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Buka Laporan Skor</span>
+              </button>
             )}
           </div>
         </div>
@@ -540,6 +554,28 @@ export const QuizView: React.FC<QuizViewProps> = ({
                   className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
                   Sambungkan
+                </button>
+              )}
+            </div>
+
+            {/* Quick Finish / Submit button in sidebar */}
+            <div className="pt-2">
+              {!isSubmitted ? (
+                <button
+                  onClick={handleForceSubmit}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-display shadow-xs transition-all cursor-pointer active:scale-95"
+                  title="Selesaikan pengerjaan dan lihat laporan skor lengkap"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Selesai & Lihat Skor ({answeredCount}/20)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold font-display shadow-xs transition-all cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Buka Laporan Hasil Ujian</span>
                 </button>
               )}
             </div>

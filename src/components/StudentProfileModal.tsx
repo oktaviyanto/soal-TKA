@@ -13,6 +13,7 @@ import {
   Calendar,
   Sparkles,
   Info,
+  LogOut,
 } from 'lucide-react';
 
 interface StudentProfileModalProps {
@@ -23,6 +24,7 @@ interface StudentProfileModalProps {
   isInitialRequired?: boolean;
   history?: QuizResult[];
   hasGoogleToken?: boolean;
+  onLogout?: () => void;
 }
 
 const AVATAR_OPTIONS = [
@@ -44,6 +46,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   isInitialRequired = false,
   history = [],
   hasGoogleToken = false,
+  onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<'lencana' | 'edit'>(
     isInitialRequired ? 'edit' : 'lencana'
@@ -214,6 +217,20 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 <Settings className="w-3.5 h-3.5" />
                 <span>Ubah Data Diri</span>
               </button>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onClose) onClose();
+                    onLogout();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer text-rose-200 hover:text-white hover:bg-rose-500/30 ml-auto font-semibold"
+                  title="Keluar dari sesi ini dan masuk dengan akun siswa lain"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Keluar / Ganti Siswa</span>
+                </button>
+              )}
             </div>
           </div>
         )}

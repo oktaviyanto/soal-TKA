@@ -26,6 +26,7 @@ import {
   Award,
   Bookmark,
   FolderOpen,
+  LogOut,
 } from 'lucide-react';
 import { getAccessToken, googleSignIn, getCurrentUser } from './services/googleAuth';
 import { initializeDriveFolderAndSheet, TARGET_FOLDER_NAME } from './services/googleSheets';
@@ -231,6 +232,17 @@ export default function App() {
     const newStudentHistory = loadStudentQuizHistory(newProfile.name);
     setQuizHistory(newStudentHistory);
     setIsProfileModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    setStudent(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY_PROFILE);
+    } catch (e) {
+      console.warn('Failed to clear profile on logout', e);
+    }
+    setQuizHistory([]);
+    setIsProfileModalOpen(true);
   };
 
   const handleConnectGoogle = async () => {
@@ -439,6 +451,16 @@ export default function App() {
                 </div>
                 <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{currentStudent.grade}</span>
               </div>
+            </button>
+
+            {/* Tombol Keluar (Sesi Login Baru) */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/50 text-slate-700 hover:text-rose-600 dark:text-slate-200 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-800 hover:border-rose-200 dark:hover:border-rose-900/60 text-xs font-semibold font-display transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="Keluar dari sesi ini dan mulai login sebagai siswa baru"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <span>Keluar</span>
             </button>
           </div>
         </div>
@@ -664,6 +686,7 @@ export default function App() {
         isInitialRequired={!student}
         history={quizHistory}
         hasGoogleToken={hasGoogleToken}
+        onLogout={handleLogout}
       />
 
       {/* AI Tutor Assistant Drawer */}
