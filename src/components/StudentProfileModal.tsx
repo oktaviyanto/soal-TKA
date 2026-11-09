@@ -137,7 +137,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 Masuk Peserta GeoTKA SMP
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Pilih nama dan kelas untuk memulai latihan soal Geometri & sinkronisasi Google Sheets.
+                Pilih nama dan kelas untuk memulai latihan soal Geometri & pemantauan performa belajar.
               </p>
             </div>
           </div>

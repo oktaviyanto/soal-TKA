@@ -5,8 +5,7 @@ import { QuestionCard } from './QuestionCard';
 import { QuizReportModal } from './QuizReportModal';
 import { PomodoroTimer } from './PomodoroTimer';
 import { GeometryStudyTips } from './GeometryStudyTips';
-import { Clock, Play, RotateCcw, AlertCircle, Circle, Box, Filter, FileSpreadsheet, CheckCircle, FileText } from 'lucide-react';
-import { getAccessToken, googleSignIn, getCurrentUser } from '../services/googleAuth';
+import { Clock, Play, RotateCcw, AlertCircle, Circle, Box, Filter, CheckCircle, FileText } from 'lucide-react';
 
 interface QuizViewProps {
   initialMode: 'simulasi' | 'latihan_mandiri';
@@ -47,13 +46,6 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [showConfirmSubmit, setShowConfirmSubmit] = useState<boolean>(false);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
-
-  // Google Auth state
-  const [hasGoogleToken, setHasGoogleToken] = useState<boolean>(false);
-
-  useEffect(() => {
-    getAccessToken().then((tok) => setHasGoogleToken(Boolean(tok)));
-  }, []);
 
   // Update questions list when filter changes
   useEffect(() => {
@@ -179,25 +171,12 @@ export const QuizView: React.FC<QuizViewProps> = ({
     setShowReportModal(false);
   };
 
-  const handleConnectGoogle = async () => {
-    try {
-      const res = await googleSignIn();
-      if (res?.accessToken) {
-        setHasGoogleToken(true);
-      }
-    } catch (e) {
-      console.warn('Google connect failed', e);
-    }
-  };
-
   const currentQuestion = questions[currentIndex];
   const answeredCount = Object.keys(userAnswers).length;
   const currentTotalScore = Object.entries(userAnswers).reduce((acc, [qId, ans]) => {
     const q = questions.find((item) => item.id === qId);
     return acc + (q && q.correctAnswer === ans ? 5 : 0);
   }, 0);
-
-  const currentUser = getCurrentUser();
 
   return (
     <div className="w-full space-y-6">
@@ -216,24 +195,6 @@ export const QuizView: React.FC<QuizViewProps> = ({
 
         {/* Mode Selector and Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Google Sheets Connection Status */}
-          {hasGoogleToken ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Drive:</span>
-              <span className="truncate max-w-[100px]">{currentUser?.email || 'Tersambung'}</span>
-            </div>
-          ) : (
-            <button
-              onClick={handleConnectGoogle}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
-              title="Sambungkan akun Google agar rekap otomatis masuk ke Google Drive"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sambungkan Google Drive</span>
-            </button>
-          )}
-
           {/* Mode switch */}
           {!isSubmitted && (
             <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
@@ -541,21 +502,6 @@ export const QuizView: React.FC<QuizViewProps> = ({
               <span className="font-bold text-slate-800 dark:text-slate-200 font-math">
                 {currentTotalScore} / 100 Poin
               </span>
-            </div>
-            <div className="flex justify-between items-center pt-1 text-[11px]">
-              <span>Google Sheets:</span>
-              {hasGoogleToken ? (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  ✓ Siap Masuk Drive
-                </span>
-              ) : (
-                <button
-                  onClick={handleConnectGoogle}
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                >
-                  Sambungkan
-                </button>
-              )}
             </div>
 
             {/* Quick Finish / Submit button in sidebar */}

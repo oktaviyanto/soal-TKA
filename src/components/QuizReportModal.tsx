@@ -9,17 +9,11 @@ import {
   BookOpen,
   Circle,
   Box,
-  FileSpreadsheet,
-  ExternalLink,
-  Check,
   Loader2,
-  AlertCircle,
-  FolderOpen,
   FileText,
+  Download,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { exportQuizResultToGoogleSheet } from '../services/googleSheets';
-import { googleSignIn, getCurrentUser, getAccessToken } from '../services/googleAuth';
 import { generateStudentPortfolioPdf } from '../services/pdfReportGenerator';
 
 interface QuizReportModalProps {
@@ -36,16 +30,10 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
   student,
   onReviewAll,
   onRetry,
-  onResultUpdated,
 }) => {
   // Score: 20 questions, 5 points per correct answer (max 100)
   const score = result.correctCount * 5;
 
-  const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [exportedUrl, setExportedUrl] = useState<string | null>(result.googleSheetUrl || null);
-  const [exportedFolderUrl, setExportedFolderUrl] = useState<string | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [isGoogleConnected, setIsGoogleConnected] = useState<boolean>(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
   const handleDownloadPdf = async () => {
@@ -54,7 +42,6 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
       await generateStudentPortfolioPdf({
         history: [result],
         student,
-        hasGoogleToken: isGoogleConnected,
       });
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -75,61 +62,7 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
         console.warn('Confetti effect failed', err);
       }
     }
-
-    // Check if token already exists
-    getAccessToken().then((token) => {
-      setIsGoogleConnected(Boolean(token));
-      // Auto export if already connected
-      if (token && !exportedUrl) {
-        handleExportToGoogle(token);
-      }
-    });
   }, [score]);
-
-  const handleExportToGoogle = async (existingToken?: string) => {
-    setIsExporting(true);
-    setExportError(null);
-    try {
-      let token = existingToken || (await getAccessToken());
-      if (!token) {
-        const signResult = await googleSignIn();
-        if (!signResult?.accessToken) {
-          throw new Error('Gagal login ke Google.');
-        }
-        token = signResult.accessToken;
-        setIsGoogleConnected(true);
-      }
-
-      // Map answers to 1-20 indexing
-      const answersMap: Record<number, 'A' | 'B' | 'C' | 'D' | '-'> = {};
-      for (let i = 1; i <= 20; i++) {
-        // Question ID format: geo-q-01 to geo-q-20
-        const qId = `geo-q-${i < 10 ? '0' : ''}${i}`;
-        answersMap[i] = result.userAnswers[qId] || '-';
-      }
-
-      const res = await exportQuizResultToGoogleSheet({
-        studentName: student.name,
-        grade: student.grade,
-        score,
-        correctCount: result.correctCount,
-        wrongCount: result.wrongCount,
-        timeSpentSeconds: result.timeSpentSeconds,
-        answers: answersMap,
-        totalQuestions: 20,
-      });
-
-      setExportedUrl(res.spreadsheetUrl);
-      setExportedFolderUrl(res.folderUrl);
-      result.googleSheetUrl = res.spreadsheetUrl;
-      onResultUpdated?.({ ...result, googleSheetUrl: res.spreadsheetUrl });
-    } catch (err: any) {
-      console.error('Export error:', err);
-      setExportError(err.message || 'Gagal menyimpan ke Google Sheets');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -162,8 +95,6 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
       color: 'text-blue-600 dark:text-blue-400',
     };
   }
-
-  const currentUser = getCurrentUser();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
@@ -267,113 +198,39 @@ export const QuizReportModal: React.FC<QuizReportModalProps> = ({
           </div>
         </div>
 
-        {/* Requirement 6: Google Sheets & Drive Output Card */}
-        <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-left space-y-3">
+        {/* Portofolio PDF Card (Tanpa Google Drive sesuai instruksi) */}
+        <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 text-left space-y-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                <FileSpreadsheet className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <FileText className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-200">
-                  Output Rekap Nilai ke Google Sheets
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Unduh Portofolio Hasil Belajar (PDF A4)
                 </h4>
-                <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300">
-                  Data nama, kelas, skor, dan jawaban per butir (1-20) otomatis tersimpan ke Google Drive.
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                  Dokumen resmi TKA Geometri Kelas 9 dengan analisis skor aktual dan rekomendasi guru.
                 </p>
               </div>
             </div>
-
-            {exportedUrl && (
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1 shrink-0 bg-white dark:bg-slate-900 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-700">
-                <Check className="w-3 h-3 text-emerald-600" /> Tersimpan di Drive
-              </span>
-            )}
           </div>
 
-          {exportError && (
-            <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{exportError}</span>
-            </div>
-          )}
-
-          {exportedUrl ? (
-            <div className="space-y-2 pt-1">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
-                <span>
-                  📁 Folder: <strong className="text-emerald-700 dark:text-emerald-300">ujicoba aplikasi</strong>
-                </span>
-                <span>
-                  Akun: <strong>{currentUser?.email || 'Google Drive'}</strong>
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={exportedUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors shrink-0"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Buka Google Sheet Rekap</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-                {exportedFolderUrl && (
-                  <a
-                    href={exportedFolderUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors shrink-0"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Buka Folder ujicoba aplikasi</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => handleExportToGoogle()}
-              disabled={isExporting}
-              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Menyimpan ke Google Drive...</span>
-                </>
-              ) : isGoogleConnected ? (
-                <>
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Kirim Hasil ke Google Sheets ({currentUser?.email || 'Drive'})</span>
-                </>
-              ) : (
-                <>
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Sambungkan Akun Google & Simpan ke Drive</span>
-                </>
-              )}
-            </button>
-          )}
-
-          {/* Download PDF button */}
           <button
             onClick={handleDownloadPdf}
             disabled={isGeneratingPdf}
-            className="w-full mt-2 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
             title="Unduh Lembar Portofolio PDF Resmi Sesi Ini"
           >
             {isGeneratingPdf ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Menyusun Dokumen Portofolio PDF...</span>
               </>
             ) : (
               <>
-                <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Unduh Portofolio PDF (A4 Resmi)</span>
+                <Download className="w-4 h-4" />
+                <span>Unduh Lembar Portofolio PDF (A4 Resmi)</span>
               </>
             )}
           </button>

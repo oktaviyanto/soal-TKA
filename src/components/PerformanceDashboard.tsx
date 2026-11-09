@@ -21,8 +21,6 @@ import {
   Clock,
   Circle,
   Box,
-  FileSpreadsheet,
-  ExternalLink,
   RotateCcw,
   Sparkles,
   ArrowRight,
@@ -708,7 +706,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
               Riwayat Lembar Jawaban & Rekap Nilai
             </h3>
             <p className="text-xs text-slate-500">
-              Daftar sesi latihan dan ketersediaan rekap Google Sheets di Google Drive.
+              Daftar riwayat sesi latihan dan simulasi ujian yang telah diselesaikan.
             </p>
           </div>
         </div>
@@ -727,8 +725,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                   <th className="py-2.5 px-3">Mode</th>
                   <th className="py-2.5 px-3">Skor (Max 100)</th>
                   <th className="py-2.5 px-3">Akurasi</th>
-                  <th className="py-2.5 px-3">Durasi</th>
-                  <th className="py-2.5 px-3 text-right">Google Drive</th>
+                  <th className="py-2.5 px-3 text-right">Durasi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -752,24 +749,8 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                     <td className="py-2.5 px-3 font-math font-medium text-slate-700 dark:text-slate-300">
                       {Math.round((item.correctCount / item.totalQuestions) * 100)}% ({item.correctCount}/20)
                     </td>
-                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 font-math">
+                    <td className="py-2.5 px-3 text-right text-slate-600 dark:text-slate-400 font-math">
                       {Math.floor(item.timeSpentSeconds / 60)}m {item.timeSpentSeconds % 60}s
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      {item.googleSheetUrl ? (
-                        <a
-                          href={item.googleSheetUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                          <span>Buka Sheet</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 text-[11px]">-</span>
-                      )}
                     </td>
                   </tr>
                 ))}

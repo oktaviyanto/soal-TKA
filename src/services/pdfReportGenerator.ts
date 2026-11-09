@@ -97,7 +97,7 @@ export const generateStudentPortfolioPdf = async ({
     month: 'long',
     year: 'numeric',
   });
-  doc.text(`Tanggal Cetak: ${todayFormatted} · Nama Pembuat : Oktaviyanto CFM · Akun: ${hasGoogleToken ? 'Google Drive Aktif' : 'Lokal'}`, margin, 23);
+  doc.text(`Tanggal Cetak: ${todayFormatted} · Nama Pembuat : Oktaviyanto CFM`, margin, 23);
 
   // ================= 2. BIODATA SISWA (STUDENT IDENTITY) =================
   let currentY = 36;
@@ -465,7 +465,7 @@ export const generateStudentPortfolioPdf = async ({
     doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
 
     doc.text(
-      'Dokumen Portofolio Resmi GeoTKA SMP Kelas 9 · Nama Pembuat : Oktaviyanto CFM · Otomatis Google Sheets & Drive',
+      'Dokumen Portofolio Resmi GeoTKA SMP Kelas 9 · Nama Pembuat : Oktaviyanto CFM · Geometri 2D & 3D',
       margin,
       pageHeight - 6
     );

@@ -25,11 +25,8 @@ import {
   TrendingUp,
   Award,
   Bookmark,
-  FolderOpen,
   LogOut,
 } from 'lucide-react';
-import { getAccessToken, googleSignIn, getCurrentUser } from './services/googleAuth';
-import { initializeDriveFolderAndSheet, TARGET_FOLDER_NAME } from './services/googleSheets';
 import { evaluateAchievements } from './data/achievements';
 import confetti from 'canvas-confetti';
 
@@ -100,9 +97,7 @@ export default function App() {
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(!student);
   const [isTutorOpen, setIsTutorOpen] = useState<boolean>(false);
-  const [hasGoogleToken, setHasGoogleToken] = useState<boolean>(false);
-  const [driveFolderInfo, setDriveFolderInfo] = useState<{ folderUrl: string; sheetUrl: string } | null>(null);
-  const [isInitializingDrive, setIsInitializingDrive] = useState<boolean>(false);
+  const hasGoogleToken = false;
 
   // Bookmarked questions state with persistence and initial sample items
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
@@ -129,21 +124,6 @@ export default function App() {
       return updated;
     });
   };
-
-  useEffect(() => {
-    getAccessToken().then((token) => {
-      if (token) {
-        setHasGoogleToken(true);
-        initializeDriveFolderAndSheet(token)
-          .then((res) => {
-            setDriveFolderInfo({ folderUrl: res.folderUrl, sheetUrl: res.spreadsheetUrl });
-          })
-          .catch((err) => {
-            console.warn('Drive check on startup:', err);
-          });
-      }
-    });
-  }, []);
 
   // Dark / Light Theme
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -245,23 +225,6 @@ export default function App() {
     setIsProfileModalOpen(true);
   };
 
-  const handleConnectGoogle = async () => {
-    try {
-      setIsInitializingDrive(true);
-      const res = await googleSignIn();
-      if (res?.accessToken) {
-        setHasGoogleToken(true);
-        const setup = await initializeDriveFolderAndSheet(res.accessToken);
-        setDriveFolderInfo({ folderUrl: setup.folderUrl, sheetUrl: setup.spreadsheetUrl });
-        setUnlockedToast(`Tersambung ke Google Drive! Folder "${TARGET_FOLDER_NAME}" & Spreadsheet telah siap.`);
-      }
-    } catch (err) {
-      console.warn('Google sign-in error:', err);
-    } finally {
-      setIsInitializingDrive(false);
-    }
-  };
-
   const AVATAR_MAP: Record<string, string> = {
     'av-1': '🔷',
     'av-2': '🔶',
@@ -283,12 +246,10 @@ export default function App() {
   const achievements = evaluateAchievements(quizHistory, hasGoogleToken);
   const unlockedBadgesCount = achievements.filter((a) => a.unlocked).length;
 
-  const currentUser = getCurrentUser();
-
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors overflow-x-hidden">
       {/* Top Academic Ribbon with Author Credit in Corner */}
-      <div className="w-full bg-slate-100/90 dark:bg-slate-900/90 border-b border-slate-200/70 dark:border-slate-800/70 py-1.5 px-4 sm:px-6">
+      <div className="w-full bg-slate-100/90 dark:bg-slate-900/90 border-b border-slate-200/70 dark:border-slate-800/70 py-1.5 px-3 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
           <span className="hidden sm:inline">Kurikulum Tes Kemampuan Akademik (TKA) Matematika SMP · Geometri 2D & 3D</span>
           <span className="sm:hidden">GeoTKA SMP Kelas 9</span>
@@ -303,7 +264,7 @@ export default function App() {
 
       {/* ================= ZONE 1: TOP BAR (Strict 3-Zone Contract) ================= */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4 lg:gap-6">
           {/* Zone 1: Single text element wordmark */}
           <button
             onClick={() => setActiveTab('latihan')}
@@ -312,13 +273,13 @@ export default function App() {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs group-hover:scale-105 transition-transform">
               📐
             </div>
-            <span className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0">
+            <span className="font-display text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap">
               GeoTKA <span className="text-indigo-600 dark:text-indigo-400">Kelas 9</span>
             </span>
           </button>
 
           {/* Zone 2: Concise single-line navigation links */}
-          <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
+          <nav className="hidden lg:flex items-center gap-3.5 xl:gap-5 text-sm font-medium text-slate-600 dark:text-slate-400">
             <button
               onClick={() => setActiveTab('latihan')}
               className={`hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -387,79 +348,52 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action & Profile Switcher */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* Google Sheets / Drive Button */}
-            {hasGoogleToken ? (
-              <a
-                href={driveFolderInfo?.folderUrl || 'https://drive.google.com'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
-                title={`Buka Folder '${TARGET_FOLDER_NAME}' di Google Drive (${currentUser?.email || ''})`}
-              >
-                <FolderOpen className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="truncate max-w-[120px]">Folder Drive</span>
-              </a>
-            ) : (
-              <button
-                onClick={handleConnectGoogle}
-                disabled={isInitializingDrive}
-                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
-                title="Sambungkan Akun Google untuk Rekap Nilai Otomatis ke Folder 'ujicoba aplikasi' di Google Drive"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isInitializingDrive ? 'Menyiapkan...' : 'Google Drive'}</span>
-              </button>
-            )}
+          {/* Zone 3: Profile Switcher & Tombol Keluar (Terletak Rapi, Tidak Terlalu Kanan & Responsif di Semua Layar) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* AI Tutor Button (Desktop & Tablet) */}
+            <button
+              onClick={() => setIsTutorOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+              title="Tanya Tutor AI Matematika"
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden md:inline">Tanya Tutor</span>
+            </button>
 
             {/* Theme Toggle */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
               aria-label="Ganti Tema Gelap / Terang"
               title="Ganti Tema"
             >
               {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
-            {/* AI Tutor Button */}
-            <button
-              onClick={() => setIsTutorOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
-              title="Tanya Kak Geo"
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Tanya Tutor</span>
-            </button>
-
             {/* Student Profile Pill / Button */}
             <button
               onClick={() => setIsProfileModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200/80 dark:border-indigo-800/80 text-xs font-semibold text-indigo-950 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200/80 dark:border-indigo-800/80 text-xs font-semibold text-indigo-950 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors cursor-pointer shrink-0"
               title="Buka Profil & Lencana Prestasi Siswa"
             >
-              <span className="text-base leading-none">
+              <span className="text-sm sm:text-base leading-none">
                 {AVATAR_MAP[currentStudent.avatar] || '🔷'}
               </span>
-              <div className="flex flex-col text-left leading-tight hidden xs:block">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate max-w-[90px] font-bold">{currentStudent.name}</span>
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-0.5" title={`${unlockedBadgesCount} Lencana Terbuka`}>
-                    🏆 {unlockedBadgesCount}
-                  </span>
-                </div>
-                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">{currentStudent.grade}</span>
-              </div>
+              <span className="truncate max-w-[65px] xs:max-w-[85px] sm:max-w-[120px] font-bold text-slate-900 dark:text-slate-100">
+                {currentStudent.name}
+              </span>
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hidden xs:inline">
+                ({currentStudent.grade})
+              </span>
             </button>
 
-            {/* Tombol Keluar (Sesi Login Baru) */}
+            {/* Tombol Keluar (Sesi Login Baru) - Tampil Jelas & Tidak Terpotong di Desktop Maupun HP */}
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/50 text-slate-700 hover:text-rose-600 dark:text-slate-200 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-800 hover:border-rose-200 dark:hover:border-rose-900/60 text-xs font-semibold font-display transition-all cursor-pointer shadow-2xs active:scale-95"
-              title="Keluar dari sesi ini dan mulai login sebagai siswa baru"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 hover:text-rose-800 dark:text-rose-300 dark:hover:text-rose-200 border border-rose-200 dark:border-rose-800/80 text-xs font-bold font-display transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
+              title="Keluar dari sesi ini dan ganti siswa"
             >
-              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <LogOut className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
               <span>Keluar</span>
             </button>
           </div>
@@ -558,7 +492,7 @@ export default function App() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
               Peserta: <strong>{currentStudent.name}</strong> ({currentStudent.grade}). 
-              Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan tampil setelah mengklik jawaban, nilai otomatis tersimpan ke spreadsheet di folder <strong>ujicoba aplikasi</strong> Google Drive!
+              Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan interaktif lengkap tersedia di setiap akhir sesi dengan lembar portofolio PDF resmi.
             </p>
           </div>
 
@@ -638,7 +572,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800 dark:text-slate-200">GeoTKA Kelas 9</span>
             <span aria-hidden="true">·</span>
-            <span>20 Butir Soal Lingkaran & Bangun Ruang · Output Otomatis Google Sheets & Drive</span>
+            <span>20 Butir Soal Lingkaran & Bangun Ruang · Portofolio Nilai PDF Resmi</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-[11px]">

@@ -74,13 +74,13 @@ export const MASTER_ACHIEVEMENTS: Omit<Achievement, 'unlocked' | 'progress'>[] =
   },
   {
     id: 'cloud_sync_master',
-    title: 'Cloud Connected',
-    description: 'Sambungkan akun Google Drive untuk pengiriman rekap nilai otomatis ke Google Sheets.',
-    icon: '☁️',
-    category: 'spesial',
-    rarity: 'Umum',
+    title: 'Tuntas KKM',
+    description: 'Raih skor minimal 75 poin pada simulasi ujian sebagai bukti ketuntasan standar materi geometri.',
+    icon: '🎯',
+    category: 'performa',
+    rarity: 'Langka',
     maxProgress: 1,
-    criteriaDescription: 'Tersambung ke Google Drive & Sheets',
+    criteriaDescription: 'Mendapat skor >= 75 poin pada sesi simulasi',
   },
 ];
 
@@ -150,10 +150,12 @@ export function evaluateAchievements(
         unlocked = progress >= 1;
         break;
 
-      case 'cloud_sync_master':
-        progress = hasGoogleToken ? 1 : 0;
-        unlocked = hasGoogleToken;
+      case 'cloud_sync_master': {
+        const kkmCount = history.filter((h) => h.score >= 75).length;
+        progress = kkmCount > 0 ? 1 : 0;
+        unlocked = progress >= 1;
         break;
+      }
 
       default:
         progress = 0;
