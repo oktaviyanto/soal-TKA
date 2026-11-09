@@ -47,6 +47,9 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
 
+  // Session key to display a fresh daily geometry tip whenever a practice session starts
+  const [sessionKey, setSessionKey] = useState<number>(() => Date.now());
+
   // Update questions list when filter changes
   useEffect(() => {
     if (isSubmitted) return;
@@ -169,6 +172,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
     setIsSubmitted(false);
     setIsTimerRunning(mode === 'simulasi');
     setShowReportModal(false);
+    setSessionKey(Date.now());
   };
 
   const currentQuestion = questions[currentIndex];
@@ -202,6 +206,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
                 onClick={() => {
                   setMode('latihan_mandiri');
                   setIsTimerRunning(false);
+                  setSessionKey(Date.now());
                 }}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                   mode === 'latihan_mandiri'
@@ -346,9 +351,9 @@ export const QuizView: React.FC<QuizViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Question Viewport (Center / Main) */}
         <div className="lg:col-span-8 space-y-4">
-          {/* Tips Belajar for Latihan Mandiri Mode */}
+          {/* Fitur Tips Belajar Harian di Dashboard Latihan Mandiri */}
           {mode === 'latihan_mandiri' && (
-            <GeometryStudyTips questionNumber={currentIndex + 1} />
+            <GeometryStudyTips sessionKey={sessionKey} />
           )}
 
           {currentQuestion && (
