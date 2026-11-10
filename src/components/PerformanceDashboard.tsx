@@ -21,6 +21,7 @@ import {
   Clock,
   Circle,
   Box,
+  BarChart3,
   RotateCcw,
   Sparkles,
   ArrowRight,
@@ -32,6 +33,7 @@ import { evaluateAchievements } from '../data/achievements';
 import { AchievementBadgeCard } from './AchievementBadgeCard';
 import { generateStudentPortfolioPdf } from '../services/pdfReportGenerator';
 import { getAccuratePerformanceRecommendation } from '../utils/performanceRecommendation';
+import { ScoreTrendBarChart } from './ScoreTrendBarChart';
 
 interface PerformanceDashboardProps {
   history: QuizResult[];
@@ -50,6 +52,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   onOpenProfile,
   hasGoogleToken = false,
 }) => {
+  const [chartViewMode, setChartViewMode] = useState<'bar' | 'area'>('bar');
   const [activeMetricTab, setActiveMetricTab] = useState<'all' | 'score' | 'accuracy'>('all');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [pdfSuccessToast, setPdfSuccessToast] = useState<boolean>(false);
@@ -269,172 +272,216 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         </div>
       </div>
 
-      {/* Main Chart: Progress Over Time (Recharts AreaChart) */}
-      <div className="p-5 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <span>Grafik Perkembangan Skor & Akurasi dari Waktu ke Waktu</span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Menunjukkan tren perolehan nilai (skala 0 - 100) dan target nilai lulus (75).
-            </p>
+      {/* Main Chart Switcher & Visualization Container */}
+      <div className="space-y-4">
+        {/* View Mode Toggle Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tampilan Visualisasi:</span>
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <button
+                onClick={() => setChartViewMode('bar')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  chartViewMode === 'bar'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Grafik Batang Skor</span>
+              </button>
+              <button
+                onClick={() => setChartViewMode('area')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  chartViewMode === 'area'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Garis Area & Akurasi</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold">
-            <button
-              onClick={() => setActiveMetricTab('all')}
-              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                activeMetricTab === 'all'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Semua
-            </button>
-            <button
-              onClick={() => setActiveMetricTab('score')}
-              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                activeMetricTab === 'score'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Skor Saja
-            </button>
-            <button
-              onClick={() => setActiveMetricTab('accuracy')}
-              className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                activeMetricTab === 'accuracy'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Akurasi Saja
-            </button>
+          <div className="text-[11px] text-slate-500 flex items-center gap-2">
+            <span>{totalSessions} Sesi Tercatat</span>
+            <span>•</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">KKM: 75</span>
           </div>
         </div>
 
-        {/* Chart Viewport */}
-        {chartData.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center p-6 text-center space-y-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-            <TrendingUp className="w-8 h-8 text-slate-400" />
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Belum ada data riwayat pengerjaan
-              </p>
-              <p className="text-xs text-slate-500 max-w-sm mt-0.5">
-                Selesaikan minimal 1 sesi latihan atau simulasi (20 butir soal) untuk melihat grafik perkembangan nilai kamu di sini.
-              </p>
-            </div>
-            <button
-              onClick={onStartQuiz}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
-            >
-              Mulai Ujian 20 Soal Sekarang
-            </button>
-          </div>
+        {/* Conditional Rendering of Chart View */}
+        {chartViewMode === 'bar' ? (
+          <ScoreTrendBarChart history={completedHistory} onStartQuiz={onStartQuiz} />
         ) : (
-          <div className="w-full h-72 sm:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="accGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
+          <div className="p-5 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span>Grafik Perkembangan Skor & Akurasi dari Waktu ke Waktu</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Menunjukkan tren perolehan nilai (skala 0 - 100) dan target nilai lulus (75).
+                </p>
+              </div>
 
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#94a3b8" opacity={0.2} />
-                <XAxis
-                  dataKey="session"
-                  stroke="#94a3b8"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={{ stroke: '#cbd5e1' }}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  stroke="#94a3b8"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={{ stroke: '#cbd5e1' }}
-                  ticks={[0, 25, 50, 75, 100]}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-slate-700">
-                          <p className="font-bold text-sm text-indigo-300">{data.session}</p>
-                          <p className="text-[11px] text-slate-400">{data.date}</p>
-                          <div className="pt-1 space-y-1 border-t border-slate-800">
-                            <p className="flex justify-between gap-4">
-                              <span>Skor Total:</span>
-                              <strong className="text-indigo-400 font-math text-sm">{data.skor} / 100</strong>
-                            </p>
-                            <p className="flex justify-between gap-4">
-                              <span>Akurasi:</span>
-                              <strong className="text-emerald-400 font-math">{data.akurasi}%</strong>
-                            </p>
-                            <p className="flex justify-between gap-4">
-                              <span>Akurasi Lingkaran:</span>
-                              <span className="font-math">{data.lingkaran}%</span>
-                            </p>
-                            <p className="flex justify-between gap-4">
-                              <span>Akurasi Bangun Ruang:</span>
-                              <span className="font-math">{data.bangunRuang}%</span>
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend verticalAlign="top" height={36} iconType="circle" />
+              <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold">
+                <button
+                  onClick={() => setActiveMetricTab('all')}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                    activeMetricTab === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Semua
+                </button>
+                <button
+                  onClick={() => setActiveMetricTab('score')}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                    activeMetricTab === 'score'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Skor Saja
+                </button>
+                <button
+                  onClick={() => setActiveMetricTab('accuracy')}
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                    activeMetricTab === 'accuracy'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Akurasi Saja
+                </button>
+              </div>
+            </div>
 
-                {/* Target line: 75 */}
-                <ReferenceLine
-                  y={75}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  label={{ value: 'Target KKM (75)', position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }}
-                />
+            {/* Area Chart Viewport */}
+            {chartData.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center p-6 text-center space-y-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <TrendingUp className="w-8 h-8 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Belum ada data riwayat pengerjaan
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-sm mt-0.5">
+                    Selesaikan minimal 1 sesi latihan atau simulasi (20 butir soal) untuk melihat grafik perkembangan nilai kamu di sini.
+                  </p>
+                </div>
+                <button
+                  onClick={onStartQuiz}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Mulai Ujian 20 Soal Sekarang
+                </button>
+              </div>
+            ) : (
+              <div className="w-full h-72 sm:h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="accGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
 
-                {(activeMetricTab === 'all' || activeMetricTab === 'score') && (
-                  <Area
-                    type="monotone"
-                    dataKey="skor"
-                    name="Skor Ujian (Max 100)"
-                    stroke="#4f46e5"
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#scoreGradient)"
-                    dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }}
-                    activeDot={{ r: 6 }}
-                  />
-                )}
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#94a3b8" opacity={0.2} />
+                    <XAxis
+                      dataKey="session"
+                      stroke="#94a3b8"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={{ stroke: '#cbd5e1' }}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      stroke="#94a3b8"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={{ stroke: '#cbd5e1' }}
+                      ticks={[0, 25, 50, 75, 100]}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-slate-700">
+                              <p className="font-bold text-sm text-indigo-300">{data.session}</p>
+                              <p className="text-[11px] text-slate-400">{data.date}</p>
+                              <div className="pt-1 space-y-1 border-t border-slate-800">
+                                <p className="flex justify-between gap-4">
+                                  <span>Skor Total:</span>
+                                  <strong className="text-indigo-400 font-math text-sm">{data.skor} / 100</strong>
+                                </p>
+                                <p className="flex justify-between gap-4">
+                                  <span>Akurasi:</span>
+                                  <strong className="text-emerald-400 font-math">{data.akurasi}%</strong>
+                                </p>
+                                <p className="flex justify-between gap-4">
+                                  <span>Akurasi Lingkaran:</span>
+                                  <span className="font-math">{data.lingkaran}%</span>
+                                </p>
+                                <p className="flex justify-between gap-4">
+                                  <span>Akurasi Bangun Ruang:</span>
+                                  <span className="font-math">{data.bangunRuang}%</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={36} iconType="circle" />
 
-                {(activeMetricTab === 'all' || activeMetricTab === 'accuracy') && (
-                  <Area
-                    type="monotone"
-                    dataKey="akurasi"
-                    name="Akurasi Jawaban (%)"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#accGradient)"
-                    dot={{ r: 3.5, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
-                  />
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
+                    {/* Target line: 75 */}
+                    <ReferenceLine
+                      y={75}
+                      stroke="#f59e0b"
+                      strokeDasharray="4 4"
+                      label={{ value: 'Target KKM (75)', position: 'insideTopRight', fill: '#f59e0b', fontSize: 11 }}
+                    />
+
+                    {(activeMetricTab === 'all' || activeMetricTab === 'score') && (
+                      <Area
+                        type="monotone"
+                        dataKey="skor"
+                        name="Skor Ujian (Max 100)"
+                        stroke="#4f46e5"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#scoreGradient)"
+                        dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6 }}
+                      />
+                    )}
+
+                    {(activeMetricTab === 'all' || activeMetricTab === 'accuracy') && (
+                      <Area
+                        type="monotone"
+                        dataKey="akurasi"
+                        name="Akurasi Jawaban (%)"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#accGradient)"
+                        dot={{ r: 3.5, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                      />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         )}
       </div>

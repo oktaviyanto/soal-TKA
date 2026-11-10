@@ -12,6 +12,7 @@ import { PerformanceDashboard } from './components/PerformanceDashboard';
 import { SavedQuestionsView } from './components/SavedQuestionsView';
 import { StudentProfileModal } from './components/StudentProfileModal';
 import { TutorDrawer } from './components/TutorDrawer';
+import { DailyChallengeHero } from './components/DailyChallengeHero';
 import {
   Sun,
   Moon,
@@ -480,36 +481,43 @@ export default function App() {
 
       {/* ================= MAIN CONTENT VIEWPORT ================= */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Hero Context Bar */}
-        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm relative overflow-hidden">
-          <div className="relative z-10 space-y-1">
-            <div className="flex items-center gap-2 text-indigo-300 text-xs font-semibold">
-              <Compass className="w-3.5 h-3.5" />
-              <span>Tes Kemampuan Akademik (TKA) Matematika Kelas 9</span>
+        {/* Hero Context Bar with Integrated Daily Challenge */}
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-sm relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="relative z-10 space-y-1">
+              <div className="flex items-center gap-2 text-indigo-300 text-xs font-semibold">
+                <Compass className="w-3.5 h-3.5" />
+                <span>Tes Kemampuan Akademik (TKA) Matematika Kelas 9</span>
+              </div>
+              <h1 className="text-lg sm:text-xl font-bold font-display tracking-tight text-white">
+                20 Butir Soal Geometri: Lingkaran & Bangun Ruang
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
+                Peserta: <strong>{currentStudent.name}</strong> ({currentStudent.grade}). 
+                Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan interaktif lengkap tersedia di setiap akhir sesi dengan lembar portofolio PDF resmi.
+              </p>
             </div>
-            <h1 className="text-lg sm:text-xl font-bold font-display tracking-tight text-white">
-              20 Butir Soal Geometri: Lingkaran & Bangun Ruang
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-              Peserta: <strong>{currentStudent.name}</strong> ({currentStudent.grade}). 
-              Penskoran: 20 butir soal (Benar = 5 poin, Salah = 0 poin). Kunci & pembahasan interaktif lengkap tersedia di setiap akhir sesi dengan lembar portofolio PDF resmi.
-            </p>
+
+            <div className="relative z-10 flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setActiveTab('simulasi')}
+                className="px-4 py-2 rounded-xl bg-white text-indigo-950 font-bold text-xs hover:bg-indigo-50 transition-colors shadow-xs cursor-pointer"
+              >
+                Mulai Ujian 20 Soal
+              </button>
+              <button
+                onClick={() => setIsTutorOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Tanya Tutor
+              </button>
+            </div>
           </div>
 
-          <div className="relative z-10 flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setActiveTab('simulasi')}
-              className="px-4 py-2 rounded-xl bg-white text-indigo-950 font-bold text-xs hover:bg-indigo-50 transition-colors shadow-xs cursor-pointer"
-            >
-              Mulai Ujian 20 Soal
-            </button>
-            <button
-              onClick={() => setIsTutorOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Tanya Tutor
-            </button>
+          {/* Daily Challenge Component: One unique challenge per day with expanded topics */}
+          <div className="relative z-10">
+            <DailyChallengeHero onGoToTopicQuiz={() => setActiveTab('latihan')} />
           </div>
 
           {/* Decorative geometric background elements */}
